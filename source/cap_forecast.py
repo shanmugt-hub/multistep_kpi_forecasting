@@ -18,7 +18,7 @@ warnings.filterwarnings("ignore")
 #Time series KPI Multistep Forecasting
 
 # ------------------------------
-# 1. Load Dataset
+# Load Dataset
 # ------------------------------
 
 # Load the dataset from local directory
@@ -38,7 +38,7 @@ df_raw.columns
 df_raw.dtypes
 
 # ------------------------------
-# 2. Preprocessing
+# Data Preprocessing
 # ------------------------------
 
 df = df_raw.sort_values(by='timestamp')
@@ -78,7 +78,7 @@ df.isnull().sum()
 df.shape
 
 # ------------------------------
-# 3. Handle Missing Timestamps
+# Handle Missing Timestamps
 # ------------------------------
 
 # Create continuous hourly index
@@ -105,22 +105,10 @@ filename = "kpi_output.csv"
 output_path = os.path.join(dir_path, filename)
 df_clean.to_csv(output_path, index=True)
 
-#EDA
-'''
-df['timestamp'] = pd.to_datetime(df['timestamp'],format="%d-%m-%Y %H:%M")
-df["value"] = pd.to_numeric(df["value"], errors="coerce")
-df = df.dropna(subset=["value"]).sort_values("timestamp")
-df.set_index('timestamp', inplace=True)
+# ------------------------------
+# EDA
+# ------------------------------
 
-# Create complete hourly range
-full_range = pd.date_range(start=df.index.min(), end=df.index.max(), freq="H")
-
-# Reindex to capture missing timestamps
-df = df.reindex(full_range)
-
-df.isnull().sum()
-
-'''
 
 #Box plot
 
@@ -142,9 +130,10 @@ plt.ylabel("Frequency")
 plt.grid(True)
 plt.tight_layout()
 plt.show()
-# ------------------------------
+
+# -------------------------------
 # PLOT BEFORE vs AFTER IMPUTATION
-# ------------------------------
+# -------------------------------
 plt.figure(figsize=(12, 5))
 
 plt.plot(
@@ -188,7 +177,9 @@ df_weekly.plot(title="Weekly Average", figsize=(15,4), color='black')
 plt.grid(True)
 plt.show()
 
-#=======
+# ------------------------------
+# Plot Hourly daily Patterns
+# ------------------------------
 
 df_clean['hour'] = df_clean.index.hour
 df_clean['dayofweek'] = df_clean.index.dayofweek
@@ -209,14 +200,20 @@ df_clean[['value', 'rolling_mean_24h']].plot(figsize=(15,5), title="Original vs 
 plt.grid(True)
 plt.show()
 
+# ------------------------------
 # Seasonal Decomposition
+# ------------------------------
+
 from statsmodels.tsa.seasonal import seasonal_decompose
 
 decomp = seasonal_decompose(df_clean['value'], model='additive', period=24)
 decomp.plot()
 plt.show()
 
-### ACF and PACF ###
+# ------------------------------
+# ACF and PACF Plot
+# ------------------------------
+
 
 from pandas.plotting import autocorrelation_plot
 from statsmodels.graphics.tsaplots import plot_acf, plot_pacf
@@ -232,7 +229,10 @@ plot_pacf(df_clean['value'], lags=50)
 plt.show()
 
 
-### ADFuller Test ###
+# ---------------------------------
+### ADFuller Test for Stationarity
+# ---------------------------------
+
 #Stationarity Check (ADF Test)
 
 from statsmodels.tsa.stattools import adfuller
@@ -251,15 +251,12 @@ else:
 ###
 
 
-
-
-
-
-#=====
 # ------------------------------
-# 6. ARIMA Model Training
+# ARIMA Model Training
 # ------------------------------
+
 # Since the series is stationary, d = 0
+
 from statsmodels.tsa.arima.model import ARIMA
 
 #model_ar = ARIMA(df_clean["value"], order=(2, 0, 2))
@@ -269,9 +266,9 @@ model_ar_fit = model_ar.fit()
 
 print(model_ar_fit.summary())
 
-# ------------------------------
-# 7. Forecasting
-# ------------------------------
+# --------------------------------
+# Forecasting with order=(3, 0, 5)
+# --------------------------------
 
 
 forecast_horizon = 12
@@ -284,8 +281,9 @@ forecast_index = pd.date_range(
 )[1:]
 
 # ------------------------------
-# 8. Plot Forecast
+# Plot Forecast
 # ------------------------------
+
 plt.figure()
 plt.plot(df_clean.index, df_clean["value"], label="Observed")
 plt.plot(forecast_index, forecast, label="Forecast", linestyle="--")
@@ -296,7 +294,7 @@ plt.ylabel("KPI Value")
 plt.show()
 
 # ------------------------------
-# 9. Output Forecast Values
+# Output Forecast Values
 # ------------------------------
 forecast_df = pd.DataFrame({
     "timestamp": forecast_index,
@@ -340,8 +338,10 @@ print(forecast_df_h)
 
 
 
-#=====
-#Rolling Forecast with ARIMA (Cross-Validation)
+# ----------------------------------------------
+# Rolling Forecast with ARIMA (Cross-Validation)
+# -----------------------------------------------
+
 from statsmodels.tsa.arima.model import ARIMA
 from sklearn.metrics import mean_absolute_error, mean_squared_error, mean_absolute_percentage_error
 
@@ -351,8 +351,8 @@ train, test = df_hourly[:train_size], df_hourly[train_size:]
 history = train.tolist()
 predictions = []
 
-# Predict for a random p,d,q values
-# p=5, d=1, q=0 — can be tuned or use auto_arima
+
+# p=3, d=0, q=5 from ACF/PACF
 
 for t in range(len(test)):
     model = ARIMA(history, order=(3,0,5))  
@@ -371,7 +371,6 @@ print(f"RMSE = {rmse:.2f}")
 print(f"MAPE = {mape:.2f}%")
 
 
-
 plt.figure(figsize=(12,6))
 plt.plot(test.index, test.values, label='Actual')
 plt.plot(test.index, predictions, label='Predicted', color='red')
@@ -382,11 +381,10 @@ plt.legend()
 plt.grid(True)
 plt.show()
 
-#=======
 
-
-### Grid Search ###
-#Manual Auto ARIMA (Grid Search with statsmodels)
+# ------------------------------------------------
+# Manual Auto ARIMA (Grid Search with statsmodels)
+# ------------------------------------------------
 
 def auto_arima_manual(ts, p_range=5, d_range=1, q_range=5):
     best_aic = np.inf
@@ -411,8 +409,7 @@ def auto_arima_manual(ts, p_range=5, d_range=1, q_range=5):
 best_model_h, best_order_h, best_aic_h = auto_arima_manual(df_hourly)
 ##best_model_d, best_order_d, best_aic_d = auto_arima_manual(df_daily)
 
-
-# Forecast for 24 hours from auto-arima
+# Forecast for 24 hours with auto-arima
 forecast_result_h = best_model_h.get_forecast(steps=24, alpha=0.05)
 
 forecast_mean_h = forecast_result_h.predicted_mean
@@ -429,7 +426,7 @@ forecast_df_h = pd.DataFrame({
 
 
 plt.figure(figsize=(12, 5))
-plt.plot(df_hourly[-96:], label='Historical', color='black')
+plt.plot(df_hourly[-24:], label='Historical', color='black')
 plt.plot(forecast_df_h.index, forecast_df_h['forecast'], label='24-Hour Forecast', color='red')
 plt.fill_between(forecast_df_h.index,
                  forecast_df_h['lower_ci'],
