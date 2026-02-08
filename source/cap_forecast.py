@@ -91,6 +91,7 @@ full_index = pd.date_range(start=df.index.min(), end=end_time, freq="h")
 df = df.reindex(full_index)
 # Count of NAN KPI values before imputation for the missing timestamps
 df.isnull().sum()
+df.shape # WE have 720 data points now
 
 df_clean = df.copy(deep=True)
 df_clean.isnull().sum()
@@ -262,7 +263,8 @@ else:
 from statsmodels.tsa.arima.model import ARIMA
 
 #model_ar = ARIMA(df_clean["value"], order=(2, 0, 2))
-model_ar = ARIMA(df_clean["value"], order=(3, 1, 3))
+#model_ar = ARIMA(df_clean["value"], order=(3, 1, 3))
+model_ar = ARIMA(df_clean["value"], order=(3, 0, 5))
 model_ar_fit = model_ar.fit()
 
 print(model_ar_fit.summary())
@@ -353,7 +355,7 @@ predictions = []
 # p=5, d=1, q=0 — can be tuned or use auto_arima
 
 for t in range(len(test)):
-    model = ARIMA(history, order=(3,1,3))  
+    model = ARIMA(history, order=(3,0,5))  
     model_fit = model.fit()
     output = model_fit.forecast()
     predictions.append(output[0])
@@ -367,6 +369,7 @@ mape = mean_absolute_percentage_error(test, predictions) * 100
 print(f"MAE  = {mae:.2f}")
 print(f"RMSE = {rmse:.2f}")
 print(f"MAPE = {mape:.2f}%")
+
 
 
 plt.figure(figsize=(12,6))
@@ -385,7 +388,7 @@ plt.show()
 ### Grid Search ###
 #Manual Auto ARIMA (Grid Search with statsmodels)
 
-def auto_arima_manual(ts, p_range=5, d_range=2, q_range=5):
+def auto_arima_manual(ts, p_range=5, d_range=1, q_range=5):
     best_aic = np.inf
     best_order = None
     best_model = None
@@ -405,49 +408,18 @@ def auto_arima_manual(ts, p_range=5, d_range=2, q_range=5):
     print(f"Best ARIMA order: {best_order} with AIC: {best_aic:.2f}")
     return best_model, best_order, best_aic
 
-best_model_d, best_order_d, best_aic_d = auto_arima_manual(df_daily)
-best_model_h, best_order_h, best_aic_h = auto_arima_manual(df_hour)
+best_model_h, best_order_h, best_aic_h = auto_arima_manual(df_hourly)
+##best_model_d, best_order_d, best_aic_d = auto_arima_manual(df_daily)
 
 
-# Forecast 30 days ahead with 95% confidence interval
-forecast_result = best_model_d.get_forecast(steps=30, alpha =0.05)
-
-# Extract predicted mean and confidence intervals
-forecast_mean = forecast_result.predicted_mean
-conf_int = forecast_result.conf_int()
-
-forecast_df1 = pd.DataFrame({
-    'forecast': forecast_mean,
-    'lower_ci': conf_int.iloc[:, 0],
-    'upper_ci': conf_int.iloc[:, 1]
-}, index=pd.date_range(start=df_daily.index[-1] + pd.Timedelta(days=1), periods=30, freq='D'))
-
-plt.figure(figsize=(12, 5))
-plt.plot(df_daily.index, df_daily, label='Historical')
-plt.plot(forecast_df1.index, forecast_df1['forecast'], label='Forecast', color='red')
-plt.fill_between(forecast_df1.index,
-                 forecast_df1['lower_ci'],
-                 forecast_df1['upper_ci'],
-                 color='blue', alpha=0.2, label='95% Confidence Interval')
-
-plt.title("30-Day Forecast with Confidence Intervals (ARIMA)")
-plt.xlabel("Date")
-plt.ylabel("DL Throughput (Mbps)")
-plt.legend()
-plt.grid(True)
-plt.show()
-
-print(forecast_df1)
-
-
-# Forecast for 48 hours
+# Forecast for 24 hours from auto-arima
 forecast_result_h = best_model_h.get_forecast(steps=24, alpha=0.05)
 
 forecast_mean_h = forecast_result_h.predicted_mean
 conf_int_h = forecast_result_h.conf_int()
 
 # Create future timestamps
-future_index_h = pd.date_range(start=df_hour.index[-1] + pd.Timedelta(hours=1), periods=24, freq='H')
+future_index_h = pd.date_range(start=df_hourly.index[-1] + pd.Timedelta(hours=1), periods=24, freq='H')
 
 forecast_df_h = pd.DataFrame({
     'forecast': forecast_mean_h,
@@ -457,16 +429,16 @@ forecast_df_h = pd.DataFrame({
 
 
 plt.figure(figsize=(12, 5))
-plt.plot(df_hour[-96:], label='Historical', color='black')
+plt.plot(df_hourly[-96:], label='Historical', color='black')
 plt.plot(forecast_df_h.index, forecast_df_h['forecast'], label='24-Hour Forecast', color='red')
 plt.fill_between(forecast_df_h.index,
                  forecast_df_h['lower_ci'],
                  forecast_df_h['upper_ci'],
                  color='blue', alpha=0.1, label='95% Confidence Interval')
 
-plt.title("24-Hour DL Throughput Forecast")
+plt.title("24-Hour KPI Forecast")
 plt.xlabel("Time")
-plt.ylabel("DL Throughput (Mbps)")
+plt.ylabel("KPI Value")
 plt.legend()
 plt.grid(True)
 plt.show()
