@@ -613,13 +613,13 @@ for t in range(len(test)):
 
 sar_residuals = np.array(sar_residuals)
 
-sar_mae = mean_absolute_error(test, sar_predictions)
-sar_rmse = np.sqrt(mean_squared_error(test, sar_predictions))
-sar_mape = mean_absolute_percentage_error(test, sar_predictions) * 100
+sar_mae_1 = mean_absolute_error(test, sar_predictions)
+sar_rmse_1 = np.sqrt(mean_squared_error(test, sar_predictions))
+sar_mape_1 = mean_absolute_percentage_error(test, sar_predictions) * 100
 
-print("MAE_SARIMA:", sar_mae)
-print("RMSE_SARIMA:", sar_rmse)
-print("MAPE_SARIMA:", sar_mape)
+print("MAE_SARIMA:", sar_mae_1)
+print("RMSE_SARIMA:", sar_rmse_1)
+print("MAPE_SARIMA:", sar_mape_1)
 
 plt.figure(figsize=(12,6))
 #plt.plot(train.index, train, label="Train")
