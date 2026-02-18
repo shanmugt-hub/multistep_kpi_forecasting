@@ -605,6 +605,7 @@ for t in range(len(test)):
     sar_model_1 = SARIMAX(sar_history, order=(1,0,1), seasonal_order=(1,1,1,24))  
     sar_model_fit_1 = sar_model_1.fit()
     sar_output = sar_model_fit_1.forecast()
+    sar_predictions.append(sar_output[0])
     sar_history.append(test[t])
     sar_error = test[t] - sar_output
     sar_residuals.append(sar_error)
