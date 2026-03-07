@@ -3,7 +3,29 @@
 Created on Tue Feb  3 16:21:43 2026
 
 @author: Shanmuganathan T
+
+Title:
+------
+KPI Multi-step Time Series Forecasting
+
+Description:
+------------
+This script performs:
+1. Data preprocessing and cleaning
+2. Exploratory Data Analysis (EDA)
+3. Stationarity testing (ADF, KPSS)
+4. ARIMA modeling
+5. Rolling walk-forward validation
+6. SARIMA modeling
+7. Manual Auto-ARIMA (Grid Search)
+8. Multi-step forecasting with confidence intervals
+
+The goal is to forecast hourly KPI values using classical
+time-series techniques.
 """
+# ===============================
+# 1. Import Required Libraries
+# ===============================
 
 #KPI Multistep Forecasting
 import numpy as np
@@ -17,9 +39,9 @@ warnings.filterwarnings("ignore")
 
 #Time series KPI Multistep Forecasting
 
-# ------------------------------
-# Load Dataset
-# ------------------------------
+# ===============================
+# 2. Load Dataset
+# ===============================
 
 # Load the dataset from local directory
 # C:Personal\\Walsh\\DA_Capstone\\dataset\\kpi_metric_1001_v1.csv
@@ -38,13 +60,13 @@ df_raw.columns
 df_raw.dtypes
 
 # ------------------------------
-# Data Preprocessing
+# 3. Data Preprocessing
 # ------------------------------
 
 df = df_raw.sort_values(by='timestamp')
 # Drop unnecessary columns
 df = df.drop(columns=["kpi_id", "entity_id"])
-
+# Convert timestamp and KPI values to correct types
 df["timestamp"] = pd.to_datetime(
     df["timestamp"], format="%d-%m-%Y %H:%M", dayfirst=True, errors="coerce"
 )
@@ -58,8 +80,10 @@ df = df.set_index("timestamp").sort_index()
 
 # Handle duplicate timestamps by averaging
 # ------------------------------
-# Identify duplicate timestamps
+# 4. Handle duplicate timestamps
 # ------------------------------
+
+# Identify duplicate timestamps
 duplicate_rows = df[df.index.duplicated(keep=False)]
 
 # Count duplicates
@@ -72,13 +96,14 @@ print(f"Number of duplicated timestamps: {num_unique_duplicate_timestamps}")
 # Display duplicate timestamps and values
 duplicate_rows.sort_values("timestamp").head()
 
+# Aggregate duplicates by averaging values
 df = df.groupby(df.index).mean()
 
 df.isnull().sum()
 df.shape
 
 # ------------------------------
-# Handle Missing Timestamps
+# 5. Handle Missing Timestamps
 # ------------------------------
 
 # Create continuous hourly index
@@ -87,7 +112,7 @@ end_time = last_timestamp.normalize() + pd.Timedelta(hours=23)
 
 full_index = pd.date_range(start=df.index.min(), end=end_time, freq="h")
 
-# Reindex to full hourly timeline
+# Reindex to continuous hourly timeline
 df = df.reindex(full_index)
 # Count of NAN KPI values before imputation for the missing timestamps
 df.isnull().sum()
@@ -95,23 +120,21 @@ df.shape # WE have 720 data points now
 
 df_clean = df.copy(deep=True)
 df_clean.isnull().sum()
-# Impute missing KPI values
+# Impute missing values using forward-fill + backward-fill
 df_clean["value"] = df_clean["value"].ffill().bfill()
 
 # Count of NAN KPI values after imputation
 df_clean.isnull().sum()
-
-filename = "kpi_output.csv"
+# Export cleaned dataset for future use
+filename = "kpi_output_1.csv"
 output_path = os.path.join(dir_path, filename)
 df_clean.to_csv(output_path, index=True)
 
 # ------------------------------
-# EDA
+# 6. EDA
 # ------------------------------
 
-
 #Box plot
-
 plt.figure(figsize=(10, 4))
 sns.boxplot(data=df_clean, x='value', color='skyblue')
 plt.title("Box Plot of KPI value")
@@ -119,7 +142,6 @@ plt.title("Box Plot of KPI value")
 plt.grid(True)
 plt.tight_layout()
 plt.show()
-
 
 # Histogram
 plt.figure(figsize=(10, 5))
@@ -159,7 +181,9 @@ plt.grid(True)
 
 plt.tight_layout()
 plt.show()
-
+# -------------------------------
+# Aggregated temporal patterns
+# -------------------------------
 # Hourly average data
 df_hourly = df_clean['value'].resample('H').mean()
 
@@ -181,9 +205,9 @@ df_weekly.plot(title="Weekly Average", figsize=(15,4), color='black')
 plt.grid(True)
 plt.show()
 
-# ------------------------------
-# Plot Hourly daily Patterns
-# ------------------------------
+# ------------------------------------------
+# Plot hour-of-day day-of-the-week Patterns
+# ------------------------------------------
 
 df_clean['hour'] = df_clean.index.hour
 df_clean['dayofweek'] = df_clean.index.dayofweek
@@ -205,13 +229,18 @@ plt.grid(True)
 plt.show()
 
 # ------------------------------
-# Seasonal Decomposition
+# 7. Seasonal Decomposition
 # ------------------------------
 
 from statsmodels.tsa.seasonal import seasonal_decompose
-
+# Decompose into trend, seasonal, residual components
 decomp = seasonal_decompose(df_clean['value'], model='additive', period=24)
 decomp.plot()
+
+full_residues = decomp.resid
+df_clean['residues'] = full_residues
+df_clean['residues'] = df_clean['residues'].dropna()
+
 plt.show()
 
 # ------------------------------
@@ -232,12 +261,15 @@ plt.show()
 plot_pacf(df_clean['value'], lags=50)
 plt.show()
 
+# ------------------------------
+# 8. Stationarity Tests
+# ------------------------------
 
-# ---------------------------------
-### ADFuller Test for Stationarity
-# ---------------------------------
-
-#Stationarity Check (ADF Test)
+# Stationarity Check (ADF Test)
+###
+# p-value < 0.5, Reject Null Hypothesis, Accept Alternative Hypothesis
+# H0 - non-stationary, H1 - Stationary
+###
 
 from statsmodels.tsa.stattools import adfuller
 
@@ -250,14 +282,12 @@ if result[1] < 0.05:
 else:
     print("Time series is non-stationary.")
 
-###
-#p-value < 0.5, Reject Null Hypothesis, Accept Alternative Hypothesis
-# H0 - non-stationary, H1 - Stationary
-###
 
-# ---------------------------------
-### KPSS
-# ---------------------------------
+# Stationarity Check (KPSS)
+###
+# p-value < 0.5, Reject Null Hypothesis, Accept Alternative Hypothesis
+# H0 - Stationary, H1 - Non-stationary
+###
 
 from statsmodels.tsa.stattools import kpss
 kpss_result = kpss(df_clean['value'].dropna(), regression="ct", nlags="auto")
@@ -274,13 +304,9 @@ if kpss_result[1] > 0.05:
 else:
     print("Time series is non-stationary.")
 
-###
-#p-value < 0.5, Reject Null Hypothesis, Accept Alternative Hypothesis
-# H0 - Stationary, H1 - Non-stationary
-###
 
 # ------------------------------
-# ARIMA Model Training
+# 9. ARIMA Model Training
 # ------------------------------
 
 # Since the series is stationary, d = 0
@@ -297,7 +323,6 @@ print(model_ar_fit.summary())
 # Forecasting with order=(1, 0, 1)
 # --------------------------------
 
-
 forecast_horizon = 12
 forecast = model_ar_fit.forecast(steps=forecast_horizon)
 
@@ -310,7 +335,6 @@ forecast_index = pd.date_range(
 # ------------------------------
 # Plot Forecast
 # ------------------------------
-
 
 plt.figure(figsize=(12,6))
 #plt.plot(df_clean.index, df_clean["value"], label="Observed")
@@ -331,13 +355,13 @@ plt.show()
 # ---------------------------------------------
 # Output Multi-step Forecast Values with CI
 # ---------------------------------------------
+
 forecast_df = pd.DataFrame({
     "timestamp": forecast_index,
     "forecast_value": forecast.values
 })
 
 print(forecast_df)
-
 
 # plot with confidence interval
 forecast_result_h = model_ar_fit.get_forecast(steps=forecast_horizon, alpha=0.05)
@@ -372,9 +396,8 @@ plt.show()
 print(forecast_df_h)
 
 
-
 # ------------------------------------------------------------
-# Multi-step Rolling Test Forecast with ARIMA - Model 1
+# Multi-step Rolling Walk Froward Forecast with ARIMA - Model 1
 # ------------------------------------------------------------
 
 from statsmodels.tsa.arima.model import ARIMA
@@ -385,7 +408,6 @@ test = []
 
 train_size = int(len(df_hourly) * 0.8)
 train, test = df_hourly[:train_size], df_hourly[train_size:]
-
 
 history = train.tolist()
 predictions = []
@@ -534,7 +556,7 @@ plt.show()
 
 
 # ------------------------------------------------
-# SARIMA
+# 11. SARIMA
 # ------------------------------------------------
 from statsmodels.tsa.statespace.sarimax import SARIMAX
 train_size = int(len(df_hourly) * 0.8)
@@ -605,6 +627,7 @@ for t in range(len(test)):
     sar_model_1 = SARIMAX(sar_history, order=(1,0,1), seasonal_order=(1,1,1,24))  
     sar_model_fit_1 = sar_model_1.fit()
     sar_output = sar_model_fit_1.forecast()
+    sar_predictions.append(sar_output[0])
     sar_history.append(test[t])
     sar_error = test[t] - sar_output
     sar_residuals.append(sar_error)
@@ -612,13 +635,13 @@ for t in range(len(test)):
 
 sar_residuals = np.array(sar_residuals)
 
-sar_mae = mean_absolute_error(test, sar_predictions)
-sar_rmse = np.sqrt(mean_squared_error(test, sar_predictions))
-sar_mape = mean_absolute_percentage_error(test, sar_predictions) * 100
+sar_mae_1 = mean_absolute_error(test, sar_predictions)
+sar_rmse_1 = np.sqrt(mean_squared_error(test, sar_predictions))
+sar_mape_1 = mean_absolute_percentage_error(test, sar_predictions) * 100
 
-print("MAE_SARIMA:", sar_mae)
-print("RMSE_SARIMA:", sar_rmse)
-print("MAPE_SARIMA:", sar_mape)
+print("MAE_SARIMA:", sar_mae_1)
+print("RMSE_SARIMA:", sar_rmse_1)
+print("MAPE_SARIMA:", sar_mape_1)
 
 plt.figure(figsize=(12,6))
 #plt.plot(train.index, train, label="Train")
@@ -651,9 +674,9 @@ plt.xlabel("Residual")
 plt.ylabel("Frequency")
 plt.show()
 
-# ------------------------------------------------
-# Manual Auto ARIMA (Grid Search with statsmodels)
-# ------------------------------------------------
+# ------------------------------------------------------------
+# 12. Manual Auto ARIMA (Grid Search with statsmodels, OPTIONAL)
+# ------------------------------------------------------------
 
 def auto_arima_manual(ts, p_range=5, d_range=1, q_range=5):
     best_aic = np.inf
@@ -709,4 +732,8 @@ plt.legend()
 plt.grid(True)
 plt.show()
 print(forecast_df_h)
+
+
+####### ========================================== #######
+
 
